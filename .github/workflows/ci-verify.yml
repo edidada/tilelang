@@ -1,0 +1,64 @@
+name: CI Verify (tilelang)
+
+on:
+  push:
+    branches: ["ci/gha-verify"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Clone upstream with submodules
+        run: |
+          git config --global core.longpaths true
+          git clone --depth=1 --recurse-submodules --shallow-submodules \
+            https://github.com/tile-ai/tilelang.git source
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build toolchain (CMake / Ninja / CUDA via pip)
+        run: |
+          python -m pip install -U pip
+          python -m pip install build "cmake>=3.26.1" "ninja>=1.11" "cython>=3.1.0" \
+            scikit-build-core "z3-solver>=4.13.0,<4.15.5" patchelf pybind11
+          python -m pip install nvidia-cuda-cccl nvidia-cuda-nvcc
+          cmake --version && ninja --version
+          python -m pip show nvidia-cuda-nvcc | head -n 5
+
+      - name: Build wheel from source
+        working-directory: source
+        env:
+          USE_CUDA: "ON"
+          WITH_PIP_CUDA_TOOLCHAIN: "1"
+          CMAKE_BUILD_PARALLEL_LEVEL: "4"
+        run: |
+          python -m build --wheel --no-isolation --outdir dist
+
+      - name: Install and smoke test
+        run: |
+          ls -lh source/dist
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install --no-deps source/dist/*.whl
+          python -m pip install apache-tvm-ffi cloudpickle ml-dtypes numpy psutil tqdm typing-extensions
+          cd /
+          python -c "import tilelang, sys; print('tilelang', tilelang.__version__); print(tilelang.__file__)"
+          python -c "import tilelang.language as T; print('dsl ok')"
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: tilelang-wheel
+          path: source/dist/*.whl
+          if-no-files-found: error
