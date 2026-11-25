@@ -33,9 +33,14 @@ jobs:
           python -m pip install -U pip
           python -m pip install build "cmake>=3.26.1" "ninja>=1.11" "cython>=3.1.0" \
             scikit-build-core "z3-solver>=4.13.0,<4.15.5" patchelf pybind11
-          python -m pip install nvidia-cuda-cccl nvidia-cuda-nvcc
+          python -m pip install nvidia-cuda-nvcc-cu13 nvidia-cuda-cccl-cu13 \
+            nvidia-cuda-runtime-cu13 nvidia-cuda-nvrtc-cu13
           cmake --version && ninja --version
-          python -m pip show nvidia-cuda-nvcc | head -n 5
+          SP="$(python -c 'import site; print(site.getsitepackages()[0])')"
+          echo "site-packages: ${SP}"
+          ls "${SP}/nvidia" || true
+          find "${SP}/nvidia" -maxdepth 3 -name nvcc -o -maxdepth 3 -name 'cuda_runtime.h' | head
+          echo "WITH_PIP_CUDA_TOOLCHAIN=${SP}" >> "${GITHUB_ENV}"
 
       - name: Build wheel from source
         working-directory: source
