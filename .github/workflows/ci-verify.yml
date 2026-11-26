@@ -53,7 +53,6 @@ jobs:
         working-directory: source
         env:
           USE_CUDA: "ON"
-          WITH_PIP_CUDA_TOOLCHAIN: "1"
           CMAKE_BUILD_PARALLEL_LEVEL: "4"
         run: |
           python -m build --wheel --no-isolation --outdir dist
